@@ -1,0 +1,40 @@
+#!/bin/sh
+# Refuse commit messages that include Claude Code's attribution line.
+# Global hook: git config --global core.hooksPath points here.
+# A repo-local hooks/commit-msg still runs first, then this check.
+
+set -u
+
+if [ "${KSM_CLAUDE_ATTRIBUTION_HOOK:-}" = 1 ]; then
+  exit 0
+fi
+export KSM_CLAUDE_ATTRIBUTION_HOOK=1
+
+hook_dir=$(CDPATH= cd -- "$(dirname "$0")" && pwd) || exit 1
+# shellcheck source=claude-attribution.sh
+. "$hook_dir/claude-attribution.sh"
+
+msg_file=${1:?commit-msg: missing message file}
+
+common_dir=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || common_dir=
+if [ -n "$common_dir" ]; then
+  local_hook="$common_dir/hooks/$(basename "$0")"
+  if [ -x "$local_hook" ] && [ "$local_hook" != "$0" ]; then
+    "$local_hook" "$@" || exit $?
+  fi
+fi
+
+matches=$(claude_attribution_matches -n -- "$msg_file")
+status=$?
+if [ "$status" -eq 0 ]; then
+  echo "commit-msg: refused a Claude Code attribution line." >&2
+  echo "Remove the line from the message and commit again." >&2
+  printf '%s\n' "$matches" >&2
+  exit 1
+fi
+if [ "$status" -gt 1 ]; then
+  echo "commit-msg: attribution check failed." >&2
+  exit 1
+fi
+
+exit 0

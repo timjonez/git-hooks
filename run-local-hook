@@ -1,0 +1,12 @@
+#!/bin/sh
+# Pass a global hooksPath slot through to the repository's own hook.
+# core.hooksPath hides .git/hooks, so each unused hook name points here.
+
+set -u
+
+common_dir=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || exit 0
+local_hook="$common_dir/hooks/$(basename "$0")"
+if [ -x "$local_hook" ] && [ "$local_hook" != "$0" ]; then
+  exec "$local_hook" "$@"
+fi
+exit 0
